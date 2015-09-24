@@ -4,7 +4,7 @@ In this project, I am analysing my running performance using GPS records collect
 
 ## Data
 
-I am using a __Garmin Forerunner 10__ GPS watch to record each run. These records were collected on the [Garmin Connect](https://connect.garmin.com/fr-FR/) platform. All runs were downloaded and saved in the [Activities.csv](https://github.com/mgirardot/Running/Activities.csv) file.
+I am using a __Garmin Forerunner 10__ GPS watch to record each run. These records were collected on the [Garmin Connect](https://connect.garmin.com/fr-FR/) platform. All runs were downloaded and saved in the [Activities.csv](https://github.com/mgirardot/Running/blob/master/Activities.csv) file.
 
 ## Results
 
