@@ -1,0 +1,256 @@
+---
+title: "Analysis of my running records"
+output: 
+  html_document: 
+    theme: cosmo
+    highlight: tango
+---
+
+# Project: Predict the best running pace and frequency for a 10km's training.
+
+I have been training to run on a 10 km distance. At some point I felt the need to record my progress, thus I bought a Garmin Forerunner 10 GPS. Since then I uploaded my running records on the Garmin connect platform. Although, the platform has nice features to visualize running data, It is not well suited for more in depth analyses such as finding the best pace on a given segment, which segment's pace has the most influence on the total running time, or which frequency of training has the most influence on the day's performance.
+
+*Project objectives*:
+
+  - Collect the data from the garmin connect platform
+  - Combine running data with other available data
+  - Perform some statistics and analysis of patterns
+  - Find out which features best explains the average running pace
+  - Find the best running frequency over a defined time period that has the best effect on the day's pace
+
+## 1. Collect the data
+
+I first downloaded all the data uploaded on the garmin connect web site as csv files. I collected all the files into one file named `Activities.csv`.
+```{r}
+activities = read.csv("c:/Users/mgirardot/Desktop/garmin_data/Activities.csv", stringsAsFactors = F)
+head(activities)
+```
+
+This dataset is 314 records long and contain the `date, running.time, distance, average.pace` and `max_pace` columns.
+
+This dataset is rather poor compared to what the GPS is actually recording. Unfortunately it is not possible to acces to the original raw data stored on the garmin servers without paying a 5000$ fee to access the API. However I have acess to the internal storage of my garmin forerunner 10 watch.
+
+Thus I could retrieve 45 runs recorded in the last 3 months.These data are stored as FIT files (Flexible and Interoperable Data). This is a binary format that can be converted to a csv file with the [FIT SDK](http://www.thisisant.com/http://www.thisisant.com/developer/resources/downloads/#software_tab).
+
+```
+> java -jar FitSDKRelease_13.10\java\FitCSVTool.jar -b 56J54309.FIT fit.csv
+FIT CSV Tool - Protocol 1.0 Profile 16,10 Release
+FIT binary file 56J54309.FIT decoded to fit*.csv files.
+```
+This utility produce 2 csv files: `fit.csv` and `fit_data.csv`
+```{r}
+fit = read.csv("C:/Users/mgirardot/Desktop/garmin_data/fit.csv", stringsAsFactors = F)
+#head(fit)
+
+fit_data = read.csv("C:/Users/mgirardot/Desktop/garmin_data/fit_data.csv", stringsAsFactors = F)
+#head(fit_data)
+```
+
+`Fit_data.csv` is properly formatted to use as a data.frame.
+
+```{r}
+#select only the records and lap data (tail all but the six first row)
+workout = tail(fit_data[,20:61],n = -6)
+names(workout)
+```
+
+The semicircle GPS coordinates are the 32 bit encoded latitude and longitude coordinates. They can be converted back using the formula: `dms = semicircles * (180/2^31)`.
+This dataset is much more fine grained. This will be very useful for an in depth analysis.
+```{r}
+plot(workout$record.distance.m./1000, workout$record.speed.m.s*3600/1000, type='l', col="steelblue", ylab = "Speed (km/h)", xlab = "Distance (km)")
+
+library(RgoogleMaps)
+
+# Storing the latitude and longitude for the center of the map in a bbox object
+bb=qbbox(as.double(mean(workout$record.position_lat.semicircles.*180/2^31)),as.double(mean(workout$record.position_long.semicircles.*180/2^31)))
+
+#size of the picture
+sz=c(550,500)
+
+# Download and save the map
+myMap=GetMap.bbox(lat =bb$latR, lon=bb$lonR, destfile = 'mapTest.png', zoom=15, size=sz)
+
+# Draw the paths as red lines on the map
+PlotOnStaticMap(myMap, lat = workout$record.position_lat.semicircles.*180/2^31, lon = workout$record.position_long.semicircles.*180/2^31, size=sz, cex=.2, lwd=2, col="red", add=F, FUN=lines)
+```
+
+## 2. Combine running data with other avaliable data
+
+One obvious complementary data to the running records is weather data. I found one free weather API : [OpenWeatherMap](http://openweathermap.org/). I asked for a free API key. I first did some cleaning of the date field in the `Activities.csv` file by splitting it into `jour, mois, date2, heure, date2_heure`columns with notepad++. Then the columns were pasted into excel and the file saved in csv.
+
+The procedure to import weather data is described in an [IPython notebook](./combine_open_weather_map_with_Activities.ipynb).
+
+
+
+## 3. Exploratory analysis
+
+  - **What is the average running pace?**
+  
+  
+```{r, message=FALSE, warning=FALSE}
+data = read.csv("C:/Users/mgirardot/Desktop/garmin_data/Activities_format_date_weather.csv", sep="\t")
+summary(data)
+
+#select only "Course à pied":
+run_data = data[data$Type == data[1,3],]
+
+
+#remove runs from peggy
+run_data$activite[1]
+run_data_michael = run_data[run_data$activite != run_data$activite[1], ]
+
+#parsing time
+vit_moy = unclass(as.POSIXlt(strptime(run_data_michael$Vitesse_moy, format = "%M:%S")))$min*60 +unclass(as.POSIXlt(strptime(run_data_michael$Vitesse_moy, format = "%M:%S")))$sec
+
+run_data_michael$vit_moy_sec = vit_moy
+mean(vit_moy)
+
+library(ggplot2)
+a=ggplot(data=run_data_michael, aes(as.Date(date2,format= "%d/%m/%Y"), vit_moy_sec/60)) + geom_point()
+a + xlab("Date") + ylab("Average pace (min/km)")+ geom_smooth()
+
+```
+
+  - **What is the frequency of training?**
+
+```{r}
+
+b = ggplot(data=run_data_michael, aes(x = as.Date(date2, format="%d/%m/%Y")))+ 
+  geom_line(stat="density", adjust=0.7, colour="steelblue") + 
+  xlim(as.Date("01/07/2014", format="%d/%m/%Y"), as.Date("01/09/2015", format="%d/%m/%Y"))
+
+b+ xlab("Date") + ylab("Density")
+```
+
+The frequency of training has decreased at fall (injuries) and winter (bad weather).
+
+
+## 4. Running pace predictions with the weather data
+
+  - **Is there a relationship between the average running pace and weather data?**
+  
+  
+```{r}
+run_data_michael$X =NULL
+pairs(run_data_michael[,17:24])
+```
+
+The average speed (s/km) do not presents some obvious correlations with the weather data. However, some non-linear correlations may be anticipated on the vit vs. temp, wind_speed and rain plots.
+
+```{r}
+glm.fit = glm(vit_moy_sec~temp+wind_speed+rain , data = run_data_michael)
+summary(glm.fit)
+```
+
+The temperature and wind_speed could explain the average pace but not the rain. Maybe some interaction of the two features could give better results:
+```{r}
+glm.fit = glm(vit_moy_sec~temp*wind_speed, data=run_data_michael)
+summary(glm.fit)
+```
+
+The interaction of the two terms is not significant.
+Some transformations:
+```{r}
+glm.fit = glm(vit_moy_sec~temp+I(exp(temp))+wind_speed+I(exp(wind_speed)), data = run_data_michael)
+summary(glm.fit)
+```
+Transformation did not improved the prediction.
+
+```{r, message=FALSE, warning=FALSE}
+
+c = ggplot(run_data_michael, aes(y=vit_moy_sec, x=temp)) + geom_point(shape=20, size=5)
+c + ylab("Running pace (s/km)") + xlab("Temperature(°K)")
+
+```
+
+
+It seems that the running pace is higher for temperatures above 290°K (18°C). Is it still true when we exclude the initial training phase from july to october 2014 ? 
+
+```{r, message=FALSE, warning=FALSE}
+# format the Date field to perform comparisons
+run_data_michael$mois_annee = as.Date(run_data_michael$date2, format="%d/%m/%Y")
+nrow(run_data_michael)
+nrow(run_data_michael[run_data_michael$mois_annee>as.Date("01/10/2014", format="%d/%m/%Y"),])
+
+subset_runs =run_data_michael[run_data_michael$mois_annee>as.Date("01/10/2014", format="%d/%m/%Y"),]
+summary(subset_runs$mois_annee)
+
+d = ggplot(subset_runs, aes(y = vit_moy_sec, x=temp)) + geom_point(shape=20, size=5)
+d + ylab("Running pace (s/km)") + xlab("Temperature(°K)")
+
+```
+
+Now that the slower runs are not included, the running pace do not seem to be correlated anymore.
+```{r}
+glm.fit = glm(vit_moy_sec~temp+wind_speed, data = subset_runs)
+summary(glm.fit)
+```
+
+The `temp`is still a predictive feature of the average pace of the run. From the coefficients, we can see that there is a 0.35 sec increase of the pace for one kelvin degree. Interestingly, the U shape looks like a quadratic function:
+```{r}
+glm.fit = glm(vit_moy_sec~temp+I(temp^2), data = subset_runs)
+summary(glm.fit)
+```
+
+Ideed, the quadratic term is significant. Let's see if a degree four polynomial could be usefull:
+
+```{r}
+glm.fit = glm(vit_moy_sec~poly(temp, 4), data = subset_runs[!is.na(subset_runs$temp),])
+summary(glm.fit)
+```
+
+The third and fourth polynomials are not significant.
+
+Estimate the standard error of the `temp` and `temp^2` coefficients using the bootstrap function:
+
+```{r, warning=FALSE}
+set.seed(1)
+
+boot.fn = function(data, index){
+  glm.fit = glm(vit_moy_sec~temp+I(temp^2), data = data, subset = index)
+
+  c= glm.fit$coefficients
+  return(c)
+}
+
+#testing the boot.fn
+boot.fn(subset_runs, sample(1:nrow(subset_runs), 50))
+
+library(boot)
+boot(subset_runs, boot.fn, 1000)
+```
+
+The standard errors are large for the $\beta$ 1 (cv=0.21) and $\beta$ 2 (cv=0.21).
+
+
+
+```{r,message=FALSE, warning=FALSE}
+dpt = data.frame(temp = seq(range(subset_runs$temp, na.rm = TRUE)[1],range(subset_runs$temp, na.rm = TRUE)[2]))
+glm.fit = glm(vit_moy_sec~temp+I(temp^2), data = subset_runs)
+dpt$pred = predict(glm.fit, newdata = dpt)
+
+e = ggplot(data = subset_runs, aes(y = vit_moy_sec, x=temp)) + geom_point(colour="grey40")
+e + geom_smooth(data = dpt, aes(x=temp, y=pred)) + ylab("Running pace (s/km)") + xlab("Temperature(°K)")
+
+range(dpt$pred)
+```
+
+This regression line shows that the optimal temperature for running is around 7°C (280°K) . However in the temperature range from -8 to 27°C the average running pace only change of 17 sec (~5%). Thus we can conclude that the temperature has a very limited impact on the running pace.
+
+Another explanation for this small correlation between the running pace and the temperature might just be a confounding variable such as the date. Indeed the temperature is changing over the year and we have seen that some periods of the year has different running pace averages. 
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+f = ggplot(data=subset_runs, aes(x=mois_annee, y= temp)) + geom_point(colour="grey40")
+f + xlab("Date") + ylab("Temperature(°K)") + geom_smooth()
+
+h = ggplot(data=subset_runs, aes(x=mois_annee, y= vit_moy_sec)) + geom_point(colour="grey40")
+h + xlab("Date") + ylab("Running pace (s/km)") + geom_smooth()
+```
+
+From the two plots above, the regression lines are not colinear, thus it is unlikely that the observed correlation between the temperature and running pace is due to similar seasonal variations. 
+
+
+In conclusion, weather data, and in particular, Temperature could have a small predictive power for estimating the average running pace. Thus the temperature feature could be incorporated into a larger predictive model.
+
+
+
+
