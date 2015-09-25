@@ -8,6 +8,6 @@ I am using a __Garmin Forerunner 10__ GPS watch to record each run. These record
 
 ## Results
 
-The details of the analysis performed are explained in [here](https://github.com/mgirardot/Running/blob/master/parse_fit_data.html).
+The details of the analysis performed are explained in [here](http://mgirardot/github.io/Running).
 
  _Michael Girardot_
