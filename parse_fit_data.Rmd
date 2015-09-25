@@ -91,7 +91,7 @@ The procedure to import weather data is described in an [IPython notebook](./com
 data = read.csv("C:/Users/mgirardot/Desktop/garmin_data/Activities_format_date_weather.csv", sep="\t")
 summary(data)
 
-#select only "Course à pied":
+#select only "Course Ã  pied":
 run_data = data[data$Type == data[1,3],]
 
 
@@ -159,12 +159,12 @@ Transformation did not improved the prediction.
 ```{r, message=FALSE, warning=FALSE}
 
 c = ggplot(run_data_michael, aes(y=vit_moy_sec, x=temp)) + geom_point(shape=20, size=5)
-c + ylab("Running pace (s/km)") + xlab("Temperature(°K)")
+c + ylab("Running pace (s/km)") + xlab("Temperature(Â°K)")
 
 ```
 
 
-It seems that the running pace is higher for temperatures above 290°K (18°C). Is it still true when we exclude the initial training phase from july to october 2014 ? 
+It seems that the running pace is higher for temperatures above 290Â°K (18Â°C). Is it still true when we exclude the initial training phase from july to october 2014 ? 
 
 ```{r, message=FALSE, warning=FALSE}
 # format the Date field to perform comparisons
@@ -176,7 +176,7 @@ subset_runs =run_data_michael[run_data_michael$mois_annee>as.Date("01/10/2014", 
 summary(subset_runs$mois_annee)
 
 d = ggplot(subset_runs, aes(y = vit_moy_sec, x=temp)) + geom_point(shape=20, size=5)
-d + ylab("Running pace (s/km)") + xlab("Temperature(°K)")
+d + ylab("Running pace (s/km)") + xlab("Temperature(Â°K)")
 
 ```
 
@@ -230,17 +230,17 @@ glm.fit = glm(vit_moy_sec~temp+I(temp^2), data = subset_runs)
 dpt$pred = predict(glm.fit, newdata = dpt)
 
 e = ggplot(data = subset_runs, aes(y = vit_moy_sec, x=temp)) + geom_point(colour="grey40")
-e + geom_smooth(data = dpt, aes(x=temp, y=pred)) + ylab("Running pace (s/km)") + xlab("Temperature(°K)")
+e + geom_smooth(data = dpt, aes(x=temp, y=pred)) + ylab("Running pace (s/km)") + xlab("Temperature(Â°K)")
 
 range(dpt$pred)
 ```
 
-This regression line shows that the optimal temperature for running is around 7°C (280°K) . However in the temperature range from -8 to 27°C the average running pace only change of 17 sec (~5%). Thus we can conclude that the temperature has a very limited impact on the running pace.
+This regression line shows that the optimal temperature for running is around 7Â°C (280Â°K) . However in the temperature range from -8 to 27Â°C the average running pace only change of 17 sec (~5%). Thus we can conclude that the temperature has a very limited impact on the running pace.
 
 Another explanation for this small correlation between the running pace and the temperature might just be a confounding variable such as the date. Indeed the temperature is changing over the year and we have seen that some periods of the year has different running pace averages. 
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 f = ggplot(data=subset_runs, aes(x=mois_annee, y= temp)) + geom_point(colour="grey40")
-f + xlab("Date") + ylab("Temperature(°K)") + geom_smooth()
+f + xlab("Date") + ylab("Temperature(Â°K)") + geom_smooth()
 
 h = ggplot(data=subset_runs, aes(x=mois_annee, y= vit_moy_sec)) + geom_point(colour="grey40")
 h + xlab("Date") + ylab("Running pace (s/km)") + geom_smooth()
